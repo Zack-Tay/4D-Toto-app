@@ -15,8 +15,12 @@ WinningNumbers is a 2d array because we need to know the group the number is in
 and the numbers that come out
 */
 type Result4d struct {
-	DrawDate       string  `json:"draw_date"`
-	WinningNumbers [][]int `json:"winning_numbers"`
+	DrawDate          string   `json:"draw_date"`
+	FirstPrize        int      `json:"firstPrize"`
+	SecondPrize       int      `json:"secondPrize"`
+	ThirdPrize        int      `json:"thirdPrize"`
+	StarterPrizes     []string `json:"startPrizes"`
+	ConsolationPrizes []string `json:"consolationPrizes"`
 }
 
 type ResultToto struct {
@@ -41,7 +45,80 @@ func parseCurrency(currency string) (int, error) {
 	return value, nil
 }
 
-func ScrapeResults() ([]ResultToto, error) {
+func Scrape4DResults() ([]Result4d, error) {
+	url := "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx?sppl=RHJhd051bWJlcj01MzAw"
+	c := colly.NewCollector()
+	var results []Result4d
+
+	c.OnHTML(".four-d-results.article-body", func(e *colly.HTMLElement) {
+		// drawDate
+		drawDate := e.ChildText(".drawDate")
+		// drawNumber := e.ChildText(".drawNumber")
+		firstPrizeElem := e.ChildText(".tdFirstPrize")   // Extract text from the .tdFirstPrize element
+		secondPrizeElem := e.ChildText(".tdSecondPrize") // Extract text from the .tdSecondPrize element
+		thirdPrizeElem := e.ChildText(".tdThirdPrize")   // Extract text from the .tdThirdPrize element
+
+		var firstPrize int
+		var secondPrize int
+		var thirdPrize int
+
+		fmt.Sscanf(firstPrizeElem, "%d", &firstPrize)
+		fmt.Sscanf(secondPrizeElem, "%d", &secondPrize)
+		fmt.Sscanf(thirdPrizeElem, "%d", &thirdPrize)
+
+		var starterPrizes []string
+		var consolationPrizes []string
+
+		// Scrape Starter Prizes
+		e.ForEach(".tbodyStarterPrizes tr", func(i int, row *colly.HTMLElement) {
+			row.ForEach("td", func(j int, cell *colly.HTMLElement) {
+				// Parse each number in the Starter Prizes
+				cellText := strings.TrimSpace(cell.Text)
+				if cellText != "" {
+					// Add the cleaned-up cell value to the starterPrizes array
+					starterPrizes = append(starterPrizes, cellText)
+				}
+			})
+		})
+
+		// Scrape Consolation Prizes
+		e.ForEach(".tbodyConsolationPrizes tr", func(i int, row *colly.HTMLElement) {
+			row.ForEach("td", func(j int, cell *colly.HTMLElement) {
+				// Parse each number in the Starter Prizes
+				cellText := strings.TrimSpace(cell.Text)
+				if cellText != "" {
+					// Add the cleaned-up cell value to the starterPrizes array
+					consolationPrizes = append(consolationPrizes, cellText)
+				}
+			})
+		})
+
+		// Append the extracted result to the results slice
+		results = append(results, Result4d{
+			DrawDate:          drawDate,
+			FirstPrize:        firstPrize,
+			SecondPrize:       secondPrize,
+			ThirdPrize:        thirdPrize,
+			StarterPrizes:     starterPrizes,
+			ConsolationPrizes: consolationPrizes,
+		})
+	})
+
+	// Handle errors
+	c.OnError(func(r *colly.Response, err error) {
+		log.Printf("Request URL: %s failed with response: %s\n", r.Request.URL, err)
+	})
+
+	// Start scraping by visiting the 4D results URL
+	err := c.Visit(url)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func ScrapeTotoResults() ([]ResultToto, error) {
 	url := "https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sppl=RHJhd051bWJlcj00MDU5"
 	c := colly.NewCollector()
 	var results []ResultToto
@@ -110,11 +187,19 @@ func ScrapeResults() ([]ResultToto, error) {
 func main() {
 	// Scrape the results
 	r := gin.Default()
+	c := colly.NewCollector()
+
+	url := "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx?sppl=RHJhd051bWJlcj01MzAw"
+
+	err := c.Visit(url)
+	if err != nil {
+		log.Fatal(err) // Handle any errors that occur during visiting the page
+	}
 
 	// Endpoint to get the results
-	r.GET("/api", func(c *gin.Context) {
+	r.GET("/api/toto", func(c *gin.Context) {
 		// Scrape results
-		results, err := ScrapeResults()
+		results, err := ScrapeTotoResults()
 		if err != nil {
 			log.Fatal("Error scraping results:", err)
 			c.JSON(500, gin.H{"error": "Error scraping results"})
@@ -133,6 +218,32 @@ func main() {
 			})
 		} else {
 			c.JSON(200, gin.H{"message": "No results found"})
+		}
+	})
+
+	// Endpoint to get the results for 4D
+	r.GET("/api/4d", func(c *gin.Context) {
+		// Scrape 4D results
+		results, err := Scrape4DResults()
+		if err != nil {
+			log.Fatal("Error scraping 4D results:", err)
+			c.JSON(500, gin.H{"error": "Error scraping 4D results"})
+			return
+		}
+
+		if len(results) > 0 {
+			// Returning the first result as a key-value JSON object
+			result := results[0] // Assuming you want the first result
+			c.JSON(200, gin.H{
+				"draw_date":          result.DrawDate,
+				"first_prize":        result.FirstPrize,
+				"second_prize":       result.SecondPrize,
+				"third_prize":        result.ThirdPrize,
+				"starter_prizes":     result.StarterPrizes,
+				"consolation_prizes": result.ConsolationPrizes,
+			})
+		} else {
+			c.JSON(200, gin.H{"message": "No 4D results found"})
 		}
 	})
 
