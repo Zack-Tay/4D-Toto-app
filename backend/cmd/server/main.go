@@ -189,11 +189,16 @@ func main() {
 	r := gin.Default()
 	c := colly.NewCollector()
 
-	url := "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx?sppl=RHJhd051bWJlcj01MzAw"
-
+	url := "https://www.singaporepools.com.sg/en/product/sr/Pages/toto_results.aspx?sppl=RHJhd051bWJlcj00MDYw"
+	url2 := "https://www.singaporepools.com.sg/en/product/pages/4d_results.aspx?sppl=RHJhd051bWJlcj01MzAw"
 	err := c.Visit(url)
 	if err != nil {
 		log.Fatal(err) // Handle any errors that occur during visiting the page
+	}
+
+	err2 := c.Visit(url2)
+	if err2 != nil {
+		log.Fatal(err2) // Handle any errors that occur during visiting the page
 	}
 
 	// Endpoint to get the results
@@ -201,7 +206,7 @@ func main() {
 		// Scrape results
 		results, err := ScrapeTotoResults()
 		if err != nil {
-			log.Fatal("Error scraping results:", err)
+			log.Println("Error scraping results:", err)
 			c.JSON(500, gin.H{"error": "Error scraping results"})
 			return
 		}
@@ -226,7 +231,7 @@ func main() {
 		// Scrape 4D results
 		results, err := Scrape4DResults()
 		if err != nil {
-			log.Fatal("Error scraping 4D results:", err)
+			log.Println("Error scraping results:", err)
 			c.JSON(500, gin.H{"error": "Error scraping 4D results"})
 			return
 		}
